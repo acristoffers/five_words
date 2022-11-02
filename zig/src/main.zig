@@ -13,14 +13,6 @@ fn letters(word: [5]u8) u32 {
     return i;
 }
 
-fn bitCount(u: u32) u8 {
-    var i: u32 = 0;
-    for ([_]u0{0} ** 32) |_, j| {
-        i += @as(u32, 1) & (u >> @truncate(u5, j));
-    }
-    return @truncate(u8, i);
-}
-
 fn appendToVowel(words_with_vowels: *WordListHashMap(u8), word: Word) !void {
     const a: u32 = @as(u32, 1) << @truncate(u5, 'a' - 'a');
     const e: u32 = @as(u32, 1) << @truncate(u5, 'e' - 'a');
@@ -29,7 +21,7 @@ fn appendToVowel(words_with_vowels: *WordListHashMap(u8), word: Word) !void {
     const u: u32 = @as(u32, 1) << @truncate(u5, 'u' - 'a');
     const all_vowels = a | e | i | o | u;
     const vowels = word[1] & all_vowels;
-    const n_vowels = bitCount(vowels);
+    const n_vowels = @popCount(vowels);
     const key = switch (n_vowels) {
         1 => switch (vowels) {
             a => @as(u8, 'a'),
@@ -235,7 +227,7 @@ pub fn main() !void {
         while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
             if (line.len == 5) {
                 const l = letters(line[0..5].*);
-                if (bitCount(l) == 5) {
+                if (@popCount(l) == 5) {
                     const word: Word = .{ line[0..5].*, l };
                     var v = try anagrams.getOrPut(l);
                     if (v.found_existing) {
