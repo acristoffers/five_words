@@ -7,7 +7,7 @@ fn WordListHashMap(comptime key: type) type {
     return std.AutoArrayHashMap(key, WordList);
 }
 
-fn letters(word: [5]u8) u32 {
+fn letters(word: []const u8) u32 {
     var i: u32 = 0;
     for (word) |c| i |= (@as(u32, 1) << @truncate(u5, c - 97));
     return i;
@@ -38,14 +38,14 @@ fn appendToVowel(words_with_vowels: *WordListHashMap(u8), word: Word) !void {
     try (try words_with_vowels.getOrPut(key)).value_ptr.append(word);
 }
 
-const WordPair = std.meta.Tuple(&.{ [2][5]u8, u32 });
+const WordPair = std.meta.Tuple(&.{ [2][]const u8, u32 });
 const WordPairList = std.ArrayList(WordPair);
-fn uniqueCombinations(allocator: std.mem.Allocator, a: WordList, b: WordList) !WordPairList {
-    var list = WordPairList.init(allocator);
-    for (a.items) |word1| {
-        for (b.items) |word2| {
-            if (word1[1] & word2[1] == 0) {
-                const pair: WordPair = .{ .{ word1[0], word2[0] }, word1[1] | word2[1] };
+fn uniqueCombinations(allocator: std.mem.Allocator, a: *const WordList, b: *const WordList) !WordPairList {
+    var list = try WordPairList.initCapacity(allocator, 100000);
+    for (a.items) |*word1| {
+        for (b.items) |*word2| {
+            if (word1.@"1" & word2.@"1" == 0) {
+                const pair: WordPair = .{ .{ &word1.@"0", &word2.@"0" }, word1.@"1" | word2.@"1" };
                 try list.append(pair);
             }
         }
@@ -53,10 +53,10 @@ fn uniqueCombinations(allocator: std.mem.Allocator, a: WordList, b: WordList) !W
     return list;
 }
 
-const WordQuartet = std.meta.Tuple(&.{ [4][5]u8, u32 });
+const WordQuartet = std.meta.Tuple(&.{ [4][]const u8, u32 });
 const WordQuartetList = std.ArrayList(WordQuartet);
 fn uniqueCombinationsQuartet(allocator: std.mem.Allocator, a: WordPairList, b: WordPairList) !WordQuartetList {
-    var list = WordQuartetList.init(allocator);
+    var list = try WordQuartetList.initCapacity(allocator, 100000);
     for (a.items) |word1| {
         for (b.items) |word2| {
             if (word1[1] & word2[1] == 0) {
@@ -74,7 +74,7 @@ pub fn memoPair(allocator: std.mem.Allocator, vowels: WordListHashMap(u8), v1: u
         _memoPairTable = std.AutoArrayHashMap(u32, WordPairList).init(allocator);
     }
 
-    const key = letters(.{ v1, v1, v1, v1, v2 });
+    const key = letters(&@as([5]u8, .{ v1, v1, v1, v1, v2 }));
     var value = try _memoPairTable.?.getOrPut(key);
     if (value.found_existing) {
         return value.value_ptr.*;
@@ -82,8 +82,8 @@ pub fn memoPair(allocator: std.mem.Allocator, vowels: WordListHashMap(u8), v1: u
 
     std.debug.print("\t\tSearching for solutions for [{c} {c}]...\n", .{ v1, v2 });
 
-    const l1 = vowels.get(v1).?;
-    const l2 = vowels.get(v2).?;
+    const l1 = vowels.getPtr(v1).?;
+    const l2 = vowels.getPtr(v2).?;
 
     value.value_ptr.* = try uniqueCombinations(allocator, l1, l2);
 
@@ -98,7 +98,7 @@ pub fn memoQuartet(allocator: std.mem.Allocator, vowels: WordListHashMap(u8), v1
         _memoQuartetTable = std.AutoArrayHashMap(u32, WordQuartetList).init(allocator);
     }
 
-    const key = letters(.{ v1, v1, v2, v3, v4 });
+    const key = letters(&@as([5]u8, .{ v1, v1, v2, v3, v4 }));
     var value = try _memoQuartetTable.?.getOrPut(key);
     if (value.found_existing) {
         return value.value_ptr.*;
@@ -116,7 +116,7 @@ pub fn memoQuartet(allocator: std.mem.Allocator, vowels: WordListHashMap(u8), v1
     return value.value_ptr.*;
 }
 
-const WordQuintet = std.meta.Tuple(&.{ [5][5]u8, u32 });
+const WordQuintet = std.meta.Tuple(&.{ [5][]const u8, u32 });
 const WordQuintetList = std.ArrayList(WordQuintet);
 pub fn memoQuintet(allocator: std.mem.Allocator, vowels: WordListHashMap(u8), v1: u8, v2: u8, v3: u8, v4: u8, v5: u8) !WordQuintetList {
     const cs: [5][5]u8 = .{ .{ v1, v2, v3, v4, v5 }, .{ v1, v2, v3, v5, v4 }, .{ v1, v2, v4, v5, v3 }, .{ v1, v3, v4, v5, v2 }, .{ v2, v3, v4, v5, v1 } };
@@ -124,7 +124,7 @@ pub fn memoQuintet(allocator: std.mem.Allocator, vowels: WordListHashMap(u8), v1
     var v: ?WordList = null;
     if (_memoQuartetTable != null) {
         for (cs) |c| {
-            if (_memoQuartetTable.?.get(letters((c[0..4] ++ c[0..1]).*))) |q| {
+            if (_memoQuartetTable.?.get(letters((c[0..4] ++ c[0..1])))) |q| {
                 quartet = q;
                 v = vowels.get(c[4]).?;
                 break;
@@ -139,12 +139,13 @@ pub fn memoQuintet(allocator: std.mem.Allocator, vowels: WordListHashMap(u8), v1
         v = vowels.get(v5).?;
     }
 
-    var list = WordQuintetList.init(allocator);
+    var list = try WordQuintetList.initCapacity(allocator, 100000);
     for (quartet.?.items) |word1| {
-        for (v.?.items) |word2| {
-            if (word1[1] & word2[1] == 0) {
-                const wl: [1][5]u8 = .{word2[0]};
-                const quintet: WordQuintet = .{ word1[0] ++ wl, word1[1] | word2[1] };
+        for (v.?.items) |*word2| {
+            if (word1.@"1" & word2.@"1" == 0) {
+                const w2: []const u8 = &word2.@"0";
+                const vec: [5][]const u8 = .{ word1.@"0"[0], word1.@"0"[1], word1.@"0"[2], word1.@"0"[3], w2 };
+                const quintet: WordQuintet = .{ vec, word1.@"1" | word2.@"1" };
                 try list.append(quintet);
             }
         }
@@ -192,9 +193,6 @@ pub fn main() !void {
 
     const allocator = gpa.allocator();
 
-    var words = WordList.init(allocator);
-    defer words.deinit();
-
     var anagrams = WordListHashMap(u32).init(allocator);
     defer {
         for (anagrams.keys()) |k| if (anagrams.get(k)) |v| v.deinit();
@@ -226,7 +224,7 @@ pub fn main() !void {
         var buf: [50]u8 = undefined;
         while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
             if (line.len == 5) {
-                const l = letters(line[0..5].*);
+                const l = letters(line[0..5]);
                 if (@popCount(l) == 5) {
                     const word: Word = .{ line[0..5].*, l };
                     var v = try anagrams.getOrPut(l);
@@ -235,7 +233,6 @@ pub fn main() !void {
                     } else {
                         v.value_ptr.* = WordList.init(allocator);
                         try v.value_ptr.append(word);
-                        try words.append(word);
                         try appendToVowel(&words_with_vowels, word);
                     }
                 }
@@ -243,7 +240,17 @@ pub fn main() !void {
         }
     }
 
-    std.debug.print("Number of words: {d}\n", .{words.items.len});
+    var num_words: usize = 0;
+    num_words += if (words_with_vowels.get('a')) |a| a.items.len else 0;
+    num_words += if (words_with_vowels.get('e')) |a| a.items.len else 0;
+    num_words += if (words_with_vowels.get('i')) |a| a.items.len else 0;
+    num_words += if (words_with_vowels.get('o')) |a| a.items.len else 0;
+    num_words += if (words_with_vowels.get('u')) |a| a.items.len else 0;
+    num_words += if (words_with_vowels.get('m')) |a| a.items.len else 0;
+    num_words += if (words_with_vowels.get('p')) |a| a.items.len else 0;
+    num_words += if (words_with_vowels.get('z')) |a| a.items.len else 0;
+
+    std.debug.print("Number of words: {d}\n", .{num_words});
     std.debug.print("Number of words with a: {d}\n", .{if (words_with_vowels.get('a')) |a| a.items.len else 0});
     std.debug.print("Number of words with e: {d}\n", .{if (words_with_vowels.get('e')) |a| a.items.len else 0});
     std.debug.print("Number of words with i: {d}\n", .{if (words_with_vowels.get('i')) |a| a.items.len else 0});
@@ -288,7 +295,7 @@ pub fn main() !void {
 
     std.debug.print("Number of combinations: {d}\n", .{cs.items.len});
 
-    var solution = WordQuintetList.init(allocator);
+    var solution = try WordQuintetList.initCapacity(allocator, 1000);
     defer solution.deinit();
 
     for (cs.items) |c| {
@@ -297,21 +304,21 @@ pub fn main() !void {
         try solution.appendSlice(result.items);
     }
 
-    var solution_with_anagrams = WordQuintetList.init(allocator);
+    var solution_with_anagrams = try WordQuintetList.initCapacity(allocator, 1000);
     defer solution_with_anagrams.deinit();
 
     for (solution.items) |sol| {
-        const a1 = anagrams.get(letters(sol[0][0])).?;
-        const a2 = anagrams.get(letters(sol[0][1])).?;
-        const a3 = anagrams.get(letters(sol[0][2])).?;
-        const a4 = anagrams.get(letters(sol[0][3])).?;
-        const a5 = anagrams.get(letters(sol[0][4])).?;
-        for (a1.items) |w1| {
-            for (a2.items) |w2| {
-                for (a3.items) |w3| {
-                    for (a4.items) |w4| {
-                        for (a5.items) |w5| {
-                            const s: WordQuintet = .{ .{ w1[0], w2[0], w3[0], w4[0], w5[0] }, w1[1] | w2[1] | w3[1] | w4[1] | w5[1] };
+        const a1 = anagrams.getPtr(letters(sol[0][0])).?;
+        const a2 = anagrams.getPtr(letters(sol[0][1])).?;
+        const a3 = anagrams.getPtr(letters(sol[0][2])).?;
+        const a4 = anagrams.getPtr(letters(sol[0][3])).?;
+        const a5 = anagrams.getPtr(letters(sol[0][4])).?;
+        for (a1.items) |*w1| {
+            for (a2.items) |*w2| {
+                for (a3.items) |*w3| {
+                    for (a4.items) |*w4| {
+                        for (a5.items) |*w5| {
+                            const s: WordQuintet = .{ .{ &w1.@"0", &w2.@"0", &w3.@"0", &w4.@"0", &w5.@"0" }, w1.@"1" | w2.@"1" | w3.@"1" | w4.@"1" | w5.@"1" };
                             try solution_with_anagrams.append(s);
                         }
                     }
@@ -324,12 +331,12 @@ pub fn main() !void {
 
     // For some reason there are repeated elements. Remove them.
     solution.clearRetainingCapacity();
-    f1: for (solution_with_anagrams.items) |sol| {
-        for (solution.items) |sol2| {
+    f1: for (solution_with_anagrams.items) |*sol| {
+        for (solution.items) |*sol2| {
             var count: u8 = 0;
-            for (sol[0]) |s| {
-                f2: for (sol2[0]) |s2| {
-                    if (std.mem.eql(u8, &s, &s2)) {
+            for (sol.@"0") |s| {
+                f2: for (sol2.@"0") |s2| {
+                    if (std.mem.eql(u8, s, s2)) {
                         count += 1;
                         break :f2;
                     }
@@ -339,7 +346,7 @@ pub fn main() !void {
                 continue :f1;
             }
         }
-        try solution.append(sol);
+        try solution.append(sol.*);
     }
 
     std.debug.print("Number of elements in solution (after cleanup): {d}\n", .{solution.items.len});
@@ -359,15 +366,15 @@ pub fn main() !void {
         defer file.close();
 
         for (solution.items) |s| {
-            try file.writeAll(&s[0][0]);
+            try file.writeAll(s[0][0]);
             try file.writeAll(",");
-            try file.writeAll(&s[0][1]);
+            try file.writeAll(s[0][1]);
             try file.writeAll(",");
-            try file.writeAll(&s[0][2]);
+            try file.writeAll(s[0][2]);
             try file.writeAll(",");
-            try file.writeAll(&s[0][3]);
+            try file.writeAll(s[0][3]);
             try file.writeAll(",");
-            try file.writeAll(&s[0][4]);
+            try file.writeAll(s[0][4]);
             try file.writeAll("\n");
         }
     }
