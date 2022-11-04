@@ -14,11 +14,11 @@ fn letters(word: []const u8) u32 {
 }
 
 fn appendToVowel(words_with_vowels: *WordListHashMap(u8), word: Word) !void {
-    const a: u32 = @as(u32, 1) << @truncate(u5, 'a' - 'a');
-    const e: u32 = @as(u32, 1) << @truncate(u5, 'e' - 'a');
-    const i: u32 = @as(u32, 1) << @truncate(u5, 'i' - 'a');
-    const o: u32 = @as(u32, 1) << @truncate(u5, 'o' - 'a');
-    const u: u32 = @as(u32, 1) << @truncate(u5, 'u' - 'a');
+    const a: u32 = comptime letters("a");
+    const e: u32 = comptime letters("e");
+    const i: u32 = comptime letters("i");
+    const o: u32 = comptime letters("o");
+    const u: u32 = comptime letters("u");
     const all_vowels = a | e | i | o | u;
     const vowels = word[1] & all_vowels;
     const n_vowels = @popCount(vowels);
@@ -231,7 +231,7 @@ pub fn main() !void {
                     if (v.found_existing) {
                         try v.value_ptr.append(word);
                     } else {
-                        v.value_ptr.* = WordList.init(allocator);
+                        v.value_ptr.* = try WordList.initCapacity(allocator, 10);
                         try v.value_ptr.append(word);
                         try appendToVowel(&words_with_vowels, word);
                     }
