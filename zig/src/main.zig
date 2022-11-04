@@ -72,6 +72,7 @@ var _memoPairTable: ?std.AutoArrayHashMap(u32, WordPairList) = null;
 pub fn memoPair(allocator: std.mem.Allocator, vowels: WordListHashMap(u8), v1: u8, v2: u8) !WordPairList {
     if (_memoPairTable == null) {
         _memoPairTable = std.AutoArrayHashMap(u32, WordPairList).init(allocator);
+        try _memoPairTable.?.ensureTotalCapacity(30);
     }
 
     const key = letters(&@as([5]u8, .{ v1, v1, v1, v1, v2 }));
@@ -96,6 +97,7 @@ var _memoQuartetTable: ?std.AutoArrayHashMap(u32, WordQuartetList) = null;
 pub fn memoQuartet(allocator: std.mem.Allocator, vowels: WordListHashMap(u8), v1: u8, v2: u8, v3: u8, v4: u8) !WordQuartetList {
     if (_memoQuartetTable == null) {
         _memoQuartetTable = std.AutoArrayHashMap(u32, WordQuartetList).init(allocator);
+        try _memoQuartetTable.?.ensureTotalCapacity(1300);
     }
 
     const key = letters(&@as([5]u8, .{ v1, v1, v2, v3, v4 }));
@@ -156,8 +158,18 @@ pub fn memoQuintet(allocator: std.mem.Allocator, vowels: WordListHashMap(u8), v1
     return list;
 }
 
+fn factorial(x: usize) usize {
+    var y = x;
+    var n = x - 1;
+    while (n > 1) : (n -= 1) {
+        y *= n;
+    }
+    return y;
+}
+
 fn combinations(allocator: std.mem.Allocator, elements: []const u8, comptime n: usize) !std.ArrayList([n]u8) {
-    var result = std.ArrayList([n]u8).init(allocator);
+    const s = factorial(elements.len) / (factorial(n) * factorial(elements.len - n));
+    var result = try std.ArrayList([n]u8).initCapacity(allocator, s);
     if (elements.len < n) return result;
     var indices = [_]usize{0} ** n;
     var reversed = [_]usize{0} ** n;
@@ -194,12 +206,14 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     var anagrams = WordListHashMap(u32).init(allocator);
+    try anagrams.ensureTotalCapacity(6000);
     defer {
         for (anagrams.keys()) |k| if (anagrams.get(k)) |v| v.deinit();
         anagrams.deinit();
     }
 
     var words_with_vowels = WordListHashMap(u8).init(allocator);
+    try words_with_vowels.ensureTotalCapacity(10);
     defer {
         for (words_with_vowels.keys()) |k| if (words_with_vowels.get(k)) |v| v.deinit();
         words_with_vowels.deinit();
